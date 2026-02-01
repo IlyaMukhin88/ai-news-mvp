@@ -5,6 +5,7 @@ import os
 import subprocess
 from PIL import Image, ImageDraw, ImageFont
 from gtts import gTTS
+import time
 
 OUTPUT_DIR = "output"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -22,9 +23,8 @@ def collect_news(sources, limit):
             })
     return news
 
-
-# ---------- FREE LLM (HuggingFace) ----------
-def generate_text(news):
+# ---------- FREE LLM (HuggingFace Router API) ----------
+def generate_text(news, retries=3, wait=5):
     prompt = f"""
 Ты финансовый новостной редактор.
 Сделай краткий новостной выпуск (3–5 минут).
@@ -34,30 +34,35 @@ def generate_text(news):
 Новости:
 {news}
 """
+    API_URL = "https://router.huggingface.co/api/models/mistralai/Mistral-7B-Instruct"
+    headers = {"Authorization": f"Bearer {os.getenv('HF_TOKEN')}"}
 
-    r = requests.post(
-        "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct",
-        headers={"Authorization": f"Bearer {os.getenv('HF_TOKEN')}"},
-        json={"inputs": prompt, "parameters": {"max_new_tokens": 700}},
-        timeout=60
-    )
+    for attempt in range(retries):
+        try:
+            r = requests.post(
+                API_URL,
+                headers=headers,
+                json={"inputs": prompt, "parameters": {"max_new_tokens": 700}},
+                timeout=60
+            )
+            resp = r.json()
 
-    resp = r.json()
+            if isinstance(resp, dict) and "error" in resp:
+                print(f"HuggingFace API error: {resp['error']}")
+                time.sleep(wait)
+                continue
 
-    # Проверка на ошибку
-    if "error" in resp:
-        print("HuggingFace API error:", resp["error"])
-        # возвращаем простой текст, чтобы MVP не падал
-        return "Ошибка генерации текста, попробуйте позже."
+            if isinstance(resp, list) and "generated_text" in resp[0]:
+                return resp[0]["generated_text"]
+            elif isinstance(resp, dict) and "generated_text" in resp:
+                return resp["generated_text"]
 
-    # Для новых моделей иногда ответ другой
-    if isinstance(resp, list) and "generated_text" in resp[0]:
-        return resp[0]["generated_text"]
-    elif "generated_text" in resp:
-        return resp["generated_text"]
+        except Exception as e:
+            print("Exception:", e)
+            time.sleep(wait)
 
-    # fallback
-    return "Не удалось сгенерировать текст."
+    print("Не удалось сгенерировать текст, используем fallback.")
+    return "Ошибка генерации текста. Попробуйте позже."
 
 # ---------- SLIDES ----------
 def make_slide(text, idx):
@@ -69,14 +74,12 @@ def make_slide(text, idx):
     img.save(path)
     return path
 
-
 # ---------- TTS ----------
 def make_audio(text):
     tts = gTTS(text=text, lang="ru")
     path = f"{OUTPUT_DIR}/audio.mp3"
     tts.save(path)
     return path
-
 
 # ---------- VIDEO ----------
 def make_video(slide, audio):
@@ -91,27 +94,28 @@ def make_video(slide, audio):
         "-shortest",
         "-pix_fmt", "yuv420p",
         out
-    ])
+    ], check=True)
     return out
-
 
 # ---------- TELEGRAM ----------
 def send_telegram(text, video):
     token = os.getenv("TG_BOT_TOKEN")
     chat_id = os.getenv("TG_CHAT_ID")
 
-    requests.post(
-        f"https://api.telegram.org/bot{token}/sendMessage",
-        data={"chat_id": chat_id, "text": text[:4000]}
-    )
-
-    with open(video, "rb") as v:
+    try:
         requests.post(
-            f"https://api.telegram.org/bot{token}/sendVideo",
-            data={"chat_id": chat_id},
-            files={"video": v}
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            data={"chat_id": chat_id, "text": text[:4000]}
         )
 
+        with open(video, "rb") as v:
+            requests.post(
+                f"https://api.telegram.org/bot{token}/sendVideo",
+                data={"chat_id": chat_id},
+                files={"video": v}
+            )
+    except Exception as e:
+        print("Ошибка Telegram:", e)
 
 # ---------- MAIN ----------
 def main():
@@ -128,9 +132,7 @@ def main():
     if cfg["telegram"]["enabled"]:
         send_telegram(text, video)
 
-    print("DONE")
-
+    print("Готово. Выпуск собран!")
 
 if __name__ == "__main__":
     main()
-
