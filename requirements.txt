@@ -1,1 +1,6 @@
+feedparser
+requests
+pyyaml
+pillow
+gtts
 
