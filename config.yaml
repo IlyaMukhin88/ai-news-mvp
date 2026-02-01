@@ -1,1 +1,13 @@
+rss_sources:
+  - https://feeds.reuters.com/reuters/businessNews
+  - https://finance.yahoo.com/rss/topstories
+  - https://www.cnbc.com/id/100003114/device/rss/rss.html
+
+max_news: 5
+language: ru
+
+telegram:
+  enabled: true
+  bot_token: "${{ secrets.TG_BOT_TOKEN }}"
+  chat_id: "${{ secrets.TG_CHAT_ID }}"
 
