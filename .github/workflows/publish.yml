@@ -2,7 +2,7 @@ name: AI News Publisher
 
 on:
   schedule:
-    - cron: "0 */12 * * *"
+    - cron: "0 */12 * * *" # каждые 12 часов
   workflow_dispatch:
 
 jobs:
@@ -11,13 +11,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install dependencies
+      - name: Install dependencies and ffmpeg
         run: |
+          sudo apt update
+          sudo apt install -y ffmpeg
           pip install -r requirements.txt
 
       - name: Run script
