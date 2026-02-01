@@ -38,10 +38,26 @@ def generate_text(news):
     r = requests.post(
         "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct",
         headers={"Authorization": f"Bearer {os.getenv('HF_TOKEN')}"},
-        json={"inputs": prompt, "parameters": {"max_new_tokens": 700}}
+        json={"inputs": prompt, "parameters": {"max_new_tokens": 700}},
+        timeout=60
     )
-    return r.json()[0]["generated_text"]
 
+    resp = r.json()
+
+    # Проверка на ошибку
+    if "error" in resp:
+        print("HuggingFace API error:", resp["error"])
+        # возвращаем простой текст, чтобы MVP не падал
+        return "Ошибка генерации текста, попробуйте позже."
+
+    # Для новых моделей иногда ответ другой
+    if isinstance(resp, list) and "generated_text" in resp[0]:
+        return resp[0]["generated_text"]
+    elif "generated_text" in resp:
+        return resp["generated_text"]
+
+    # fallback
+    return "Не удалось сгенерировать текст."
 
 # ---------- SLIDES ----------
 def make_slide(text, idx):
