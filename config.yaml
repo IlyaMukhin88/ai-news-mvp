@@ -10,4 +10,3 @@ telegram:
   enabled: true
   bot_token: "${{ secrets.TG_BOT_TOKEN }}"
   chat_id: "${{ secrets.TG_CHAT_ID }}"
-
