@@ -23,8 +23,8 @@ def collect_news(sources, limit):
             })
     return news
 
-# ---------- FREE LLM (HuggingFace Router API) ----------
-def generate_text(news, retries=3, wait=5):
+# ---------- FREE LLM (Falcon Router API) ----------
+def generate_text(news, retries=5, wait=10):
     prompt = f"""
 Ты финансовый новостной редактор.
 Сделай краткий новостной выпуск (3–5 минут).
@@ -34,7 +34,7 @@ def generate_text(news, retries=3, wait=5):
 Новости:
 {news}
 """
-    API_URL = "https://router.huggingface.co/api/models/mistralai/Mistral-7B-Instruct"
+    API_URL = "https://router.huggingface.co/api/models/tiiuae/falcon-7b-instruct"
     headers = {"Authorization": f"Bearer {os.getenv('HF_TOKEN')}"}
 
     for attempt in range(retries):
@@ -48,7 +48,7 @@ def generate_text(news, retries=3, wait=5):
             resp = r.json()
 
             if isinstance(resp, dict) and "error" in resp:
-                print(f"HuggingFace API error: {resp['error']}")
+                print(f"HuggingFace API error: {resp['error']}. Retry {attempt+1}/{retries}")
                 time.sleep(wait)
                 continue
 
@@ -58,11 +58,11 @@ def generate_text(news, retries=3, wait=5):
                 return resp["generated_text"]
 
         except Exception as e:
-            print("Exception:", e)
+            print(f"Exception: {e}. Retry {attempt+1}/{retries}")
             time.sleep(wait)
 
-    print("Не удалось сгенерировать текст, используем fallback.")
-    return "Ошибка генерации текста. Попробуйте позже."
+    print("Не удалось сгенерировать текст, используем заголовки RSS как fallback.")
+    return "\n".join([f"{n['source']}: {n['title']}" for n in news])
 
 # ---------- SLIDES ----------
 def make_slide(text, idx):
